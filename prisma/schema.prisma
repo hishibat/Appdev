@@ -1,0 +1,360 @@
+// ABeam IT Governance Quick Assessment - Database Schema
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============ MULTI-TENANT & RBAC ============
+
+model Organization {
+  id        String    @id @default(cuid())
+  name      String
+  domain    String?   @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  clients   Client[]
+  users     User[]
+
+  @@map("organizations")
+}
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  name           String?
+  passwordHash   String
+  role           UserRole @default(CLIENT_USER)
+  locale         String   @default("en") // "en" | "ja"
+
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  clientId       String?
+  client         Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  projects       Project[]
+  sessions       SurveySession[]
+  auditLogs      AuditLog[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  CONSULTANT
+  CLIENT_USER
+}
+
+model Client {
+  id             String   @id @default(cuid())
+  name           String
+  industry       String?
+  contactEmail   String?
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  projects       Project[]
+  users          User[]
+
+  @@map("clients")
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  surveys     Survey[]
+
+  @@map("projects")
+}
+
+// ============ SURVEY & QUESTIONS ============
+
+model SurveyTemplate {
+  id          String   @id @default(cuid())
+  name        String   // "Quick (20Q)", "Standard (35Q)", "Deep (50Q)"
+  description String?
+  questionCount Int
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  surveys     Survey[]
+  questions   SurveyTemplateQuestion[]
+
+  @@map("survey_templates")
+}
+
+model Question {
+  id             String   @id @default(cuid())
+  code           String   @unique // "P1", "S2", "C3", "I4", "R5"
+  domain         Domain
+  textEn         String   @db.Text
+  textJa         String   @db.Text
+  descriptionEn  String?  @db.Text
+  descriptionJa  String?  @db.Text
+  weight         Float    @default(1.0)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  templates      SurveyTemplateQuestion[]
+  responses      Response[]
+
+  @@map("questions")
+}
+
+enum Domain {
+  PROCESS_ORG_HR
+  SYSTEM_TECH
+  COST
+  INFORMATION
+  RISK_SECURITY
+}
+
+model SurveyTemplateQuestion {
+  templateId String
+  template   SurveyTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  order      Int
+
+  @@id([templateId, questionId])
+  @@map("survey_template_questions")
+}
+
+model Survey {
+  id          String   @id @default(cuid())
+  title       String
+  description String?  @db.Text
+
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  templateId  String
+  template    SurveyTemplate @relation(fields: [templateId], references: [id])
+
+  publicToken String   @unique @default(cuid())
+  expiresAt   DateTime?
+
+  pdpaConsentTextEn String? @db.Text
+  pdpaConsentTextJa String? @db.Text
+  retentionDays     Int     @default(730) // 2 years
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  sessions    SurveySession[]
+
+  @@map("surveys")
+}
+
+// ============ SURVEY SESSIONS & RESPONSES ============
+
+model SurveySession {
+  id              String   @id @default(cuid())
+
+  surveyId        String
+  survey          Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+
+  respondentId    String?
+  respondent      User?    @relation(fields: [respondentId], references: [id], onDelete: SetNull)
+
+  respondentName  String?
+  respondentEmail String?
+
+  status          SessionStatus @default(IN_PROGRESS)
+  startedAt       DateTime      @default(now())
+  submittedAt     DateTime?
+
+  pdpaConsented   Boolean  @default(false)
+  pdpaConsentedAt DateTime?
+
+  aspirationProfile AspirationType @default(BALANCED)
+
+  // Calculated scores (filled after submission)
+  scoreProcessOrgHr  Float?
+  scoreSystemTech    Float?
+  scoreCost          Float?
+  scoreInformation   Float?
+  scoreRiskSecurity  Float?
+  overallScore       Float?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  responses       Response[]
+  insights        Insight[]
+
+  @@map("survey_sessions")
+}
+
+enum SessionStatus {
+  IN_PROGRESS
+  SUBMITTED
+  ARCHIVED
+}
+
+enum AspirationType {
+  CONSERVATIVE  // 保守的
+  BALANCED      // 標準的
+  PROGRESSIVE   // 挑戦的
+}
+
+model Response {
+  id         String   @id @default(cuid())
+
+  sessionId  String
+  session    SurveySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id])
+
+  value      Float    // 0-5 scale
+  comment    String?  @db.Text
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([sessionId, questionId])
+  @@map("responses")
+}
+
+// ============ INSIGHTS & RECOMMENDATIONS ============
+
+model Insight {
+  id         String   @id @default(cuid())
+
+  sessionId  String
+  session    SurveySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  domain     Domain?
+  type       InsightType
+  severity   SeverityLevel
+
+  titleEn    String
+  titleJa    String
+
+  descriptionEn String @db.Text
+  descriptionJa String @db.Text
+
+  gap        Float? // For gap insights
+
+  createdAt  DateTime @default(now())
+
+  recommendations RecommendationInstance[]
+
+  @@map("insights")
+}
+
+enum InsightType {
+  GAP_CRITICAL
+  GAP_HIGH
+  GAP_MEDIUM
+  STRENGTH
+  QUICK_WIN
+  PRIORITY_AREA
+}
+
+enum SeverityLevel {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+  INFO
+}
+
+model RecommendationRule {
+  id          String   @id @default(cuid())
+  key         String   @unique // "REC_PROC_01"
+
+  domain      Domain?
+  severity    SeverityLevel
+  effort      EffortLevel
+
+  titleEn     String
+  titleJa     String
+
+  descriptionEn String @db.Text
+  descriptionJa String @db.Text
+
+  // Trigger conditions (JSON)
+  // e.g. { "domain": "PROCESS_ORG_HR", "gap": { "min": 2.0 } }
+  triggerConditions Json
+
+  priority    Int      @default(100)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  instances   RecommendationInstance[]
+
+  @@map("recommendation_rules")
+}
+
+enum EffortLevel {
+  LOW     // 0-3 months
+  MEDIUM  // 3-6 months
+  HIGH    // 6-12 months
+}
+
+model RecommendationInstance {
+  id         String   @id @default(cuid())
+
+  insightId  String
+  insight    Insight  @relation(fields: [insightId], references: [id], onDelete: Cascade)
+
+  ruleId     String
+  rule       RecommendationRule @relation(fields: [ruleId], references: [id])
+
+  timeframe  EffortLevel
+
+  createdAt  DateTime @default(now())
+
+  @@map("recommendation_instances")
+}
+
+// ============ AUDIT & COMPLIANCE ============
+
+model AuditLog {
+  id         String   @id @default(cuid())
+
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  action     String   // "survey.created", "session.submitted", "report.downloaded"
+  resource   String   // Resource ID
+  resourceType String // "Survey", "SurveySession", etc.
+
+  metadata   Json?
+  ipAddress  String?
+  userAgent  String?
+
+  createdAt  DateTime @default(now())
+
+  @@map("audit_logs")
+}
