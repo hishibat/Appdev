@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>食事糖質アナライザー</title>
+  <link rel="stylesheet" href="styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🍽️ 食事糖質アナライザー</h1>
+      <p class="subtitle">食事の画像をアップロードして、糖質の観点から分析します</p>
+    </header>
+
+    <main>
+      <div class="upload-section">
+        <div class="upload-area" id="uploadArea">
+          <div class="upload-icon">📷</div>
+          <p class="upload-text">クリックまたはドラッグ&ドロップで<br>画像をアップロード</p>
+          <p class="upload-hint">対応形式: JPEG, PNG, GIF, WebP (最大10MB)</p>
+          <input type="file" id="fileInput" accept="image/jpeg,image/png,image/gif,image/webp" hidden>
+        </div>
+
+        <div class="preview-container" id="previewContainer" style="display: none;">
+          <img id="previewImage" alt="プレビュー">
+          <button class="remove-btn" id="removeBtn">✕</button>
+        </div>
+
+        <button class="analyze-btn" id="analyzeBtn" disabled>
+          <span class="btn-text">分析する</span>
+          <span class="btn-loading" style="display: none;">
+            <span class="spinner"></span>
+            分析中...
+          </span>
+        </button>
+      </div>
+
+      <div class="result-section" id="resultSection" style="display: none;">
+        <h2>📊 分析結果</h2>
+        <div class="result-content" id="resultContent"></div>
+      </div>
+
+      <div class="error-message" id="errorMessage" style="display: none;"></div>
+    </main>
+
+    <footer>
+      <p>※ この分析は推定であり、実際の糖質量は調理方法や分量により異なる場合があります</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
