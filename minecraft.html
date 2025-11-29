@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browser Minecraft</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            background: #87CEEB;
+            font-family: 'Segoe UI', Arial, sans-serif;
+        }
+
+        #game-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        #crosshair {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 30px;
+            height: 30px;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        #crosshair::before,
+        #crosshair::after {
+            content: '';
+            position: absolute;
+            background: white;
+            mix-blend-mode: difference;
+        }
+
+        #crosshair::before {
+            width: 2px;
+            height: 20px;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        #crosshair::after {
+            width: 20px;
+            height: 2px;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        #hotbar {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 4px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 8px;
+            border-radius: 8px;
+            z-index: 100;
+        }
+
+        .hotbar-slot {
+            width: 50px;
+            height: 50px;
+            border: 3px solid #555;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+            background: rgba(139, 139, 139, 0.7);
+        }
+
+        .hotbar-slot.selected {
+            border-color: #fff;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+
+        .hotbar-slot .block-preview {
+            width: 36px;
+            height: 36px;
+            border-radius: 4px;
+        }
+
+        .hotbar-slot .slot-number {
+            position: absolute;
+            top: 2px;
+            left: 4px;
+            font-size: 10px;
+            color: white;
+            text-shadow: 1px 1px 2px black;
+        }
+
+        #info {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 14px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 15px;
+            border-radius: 8px;
+            max-width: 280px;
+        }
+
+        #info h2 {
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+
+        #info p {
+            margin: 5px 0;
+            line-height: 1.4;
+        }
+
+        #start-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1a472a 0%, #2d5a27 50%, #1a472a 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        #start-screen h1 {
+            font-size: 72px;
+            color: #fff;
+            text-shadow: 4px 4px 8px rgba(0, 0, 0, 0.5),
+                         0 0 40px rgba(100, 200, 100, 0.3);
+            margin-bottom: 20px;
+            letter-spacing: 4px;
+        }
+
+        #start-screen .subtitle {
+            font-size: 24px;
+            color: #aaffaa;
+            margin-bottom: 40px;
+        }
+
+        #start-button {
+            padding: 20px 60px;
+            font-size: 24px;
+            background: linear-gradient(180deg, #5a5 0%, #484 100%);
+            border: 4px solid #363;
+            color: white;
+            cursor: pointer;
+            border-radius: 8px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            transition: all 0.2s;
+        }
+
+        #start-button:hover {
+            background: linear-gradient(180deg, #6b6 0%, #595 100%);
+            transform: scale(1.05);
+        }
+
+        #debug-info {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            color: white;
+            font-size: 12px;
+            font-family: monospace;
+            text-shadow: 1px 1px 2px black;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="start-screen">
+        <h1>MINECRAFT</h1>
+        <p class="subtitle">Browser Edition</p>
+        <button id="start-button">クリックしてプレイ</button>
+    </div>
+
+    <div id="game-container">
+        <div id="crosshair"></div>
+
+        <div id="info">
+            <h2>操作方法</h2>
+            <p>🎮 WASD: 移動</p>
+            <p>🖱️ マウス: 視点</p>
+            <p>⬆️ Space: ジャンプ</p>
+            <p>🔨 左クリック: ブロック破壊</p>
+            <p>🧱 右クリック: ブロック配置</p>
+            <p>🔢 1-9: ブロック選択</p>
+            <p>🏃 Shift: しゃがみ</p>
+        </div>
+
+        <div id="debug-info">
+            <div>FPS: <span id="fps">0</span></div>
+            <div>位置: <span id="position">0, 0, 0</span></div>
+            <div>ブロック数: <span id="block-count">0</span></div>
+        </div>
+
+        <div id="hotbar"></div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+
+        // Block types with colors and textures
+        const BLOCK_TYPES = {
+            GRASS: { id: 1, name: 'Grass', top: 0x7CFC00, side: 0x8B4513, bottom: 0x654321 },
+            DIRT: { id: 2, name: 'Dirt', top: 0x8B4513, side: 0x8B4513, bottom: 0x8B4513 },
+            STONE: { id: 3, name: 'Stone', top: 0x808080, side: 0x808080, bottom: 0x808080 },
+            WOOD: { id: 4, name: 'Wood', top: 0xDEB887, side: 0x8B4513, bottom: 0xDEB887 },
+            LEAVES: { id: 5, name: 'Leaves', top: 0x228B22, side: 0x228B22, bottom: 0x228B22, transparent: true },
+            SAND: { id: 6, name: 'Sand', top: 0xF4A460, side: 0xF4A460, bottom: 0xF4A460 },
+            WATER: { id: 7, name: 'Water', top: 0x4169E1, side: 0x4169E1, bottom: 0x4169E1, transparent: true },
+            COBBLESTONE: { id: 8, name: 'Cobblestone', top: 0x696969, side: 0x696969, bottom: 0x696969 },
+            PLANKS: { id: 9, name: 'Planks', top: 0xDEB887, side: 0xDEB887, bottom: 0xDEB887 }
+        };
+
+        class MinecraftGame {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.controls = null;
+                this.blocks = new Map();
+                this.blockMeshes = new Map();
+                this.selectedBlockType = BLOCK_TYPES.GRASS;
+                this.hotbarSlots = Object.values(BLOCK_TYPES);
+                this.selectedSlot = 0;
+
+                // Player physics
+                this.velocity = new THREE.Vector3();
+                this.direction = new THREE.Vector3();
+                this.moveForward = false;
+                this.moveBackward = false;
+                this.moveLeft = false;
+                this.moveRight = false;
+                this.canJump = false;
+                this.isCrouching = false;
+
+                // World settings
+                this.worldSize = 32;
+                this.chunkSize = 16;
+                this.blockSize = 1;
+
+                // Raycaster for block interaction
+                this.raycaster = new THREE.Raycaster();
+                this.raycaster.far = 8;
+
+                // Performance
+                this.clock = new THREE.Clock();
+                this.frameCount = 0;
+                this.lastFpsUpdate = 0;
+
+                // Highlight for selected block
+                this.highlightMesh = null;
+
+                this.init();
+            }
+
+            init() {
+                // Scene setup
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(0x87CEEB);
+                this.scene.fog = new THREE.Fog(0x87CEEB, 20, 80);
+
+                // Camera setup
+                this.camera = new THREE.PerspectiveCamera(
+                    75,
+                    window.innerWidth / window.innerHeight,
+                    0.1,
+                    1000
+                );
+                this.camera.position.set(16, 20, 16);
+
+                // Renderer setup
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                document.getElementById('game-container').appendChild(this.renderer.domElement);
+
+                // Controls
+                this.controls = new PointerLockControls(this.camera, document.body);
+
+                // Lighting
+                this.setupLighting();
+
+                // Create highlight mesh
+                this.createHighlightMesh();
+
+                // Generate world
+                this.generateWorld();
+
+                // Setup hotbar
+                this.setupHotbar();
+
+                // Event listeners
+                this.setupEventListeners();
+
+                // Start game loop
+                this.animate();
+            }
+
+            setupLighting() {
+                // Ambient light
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                this.scene.add(ambientLight);
+
+                // Directional light (sun)
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                directionalLight.position.set(50, 100, 50);
+                directionalLight.castShadow = true;
+                directionalLight.shadow.mapSize.width = 2048;
+                directionalLight.shadow.mapSize.height = 2048;
+                directionalLight.shadow.camera.near = 0.5;
+                directionalLight.shadow.camera.far = 200;
+                directionalLight.shadow.camera.left = -50;
+                directionalLight.shadow.camera.right = 50;
+                directionalLight.shadow.camera.top = 50;
+                directionalLight.shadow.camera.bottom = -50;
+                this.scene.add(directionalLight);
+
+                // Hemisphere light for better ambient
+                const hemisphereLight = new THREE.HemisphereLight(0x87CEEB, 0x8B4513, 0.3);
+                this.scene.add(hemisphereLight);
+            }
+
+            createHighlightMesh() {
+                const geometry = new THREE.BoxGeometry(1.01, 1.01, 1.01);
+                const edges = new THREE.EdgesGeometry(geometry);
+                const material = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
+                this.highlightMesh = new THREE.LineSegments(edges, material);
+                this.highlightMesh.visible = false;
+                this.scene.add(this.highlightMesh);
+            }
+
+            createBlockGeometry() {
+                return new THREE.BoxGeometry(this.blockSize, this.blockSize, this.blockSize);
+            }
+
+            createBlockMaterial(blockType) {
+                const materials = [];
+
+                // Order: right, left, top, bottom, front, back
+                const sides = [
+                    blockType.side,   // right
+                    blockType.side,   // left
+                    blockType.top,    // top
+                    blockType.bottom, // bottom
+                    blockType.side,   // front
+                    blockType.side    // back
+                ];
+
+                for (const color of sides) {
+                    materials.push(new THREE.MeshLambertMaterial({
+                        color: color,
+                        transparent: blockType.transparent || false,
+                        opacity: blockType.transparent ? 0.8 : 1.0
+                    }));
+                }
+
+                return materials;
+            }
+
+            getBlockKey(x, y, z) {
+                return `${Math.floor(x)},${Math.floor(y)},${Math.floor(z)}`;
+            }
+
+            addBlock(x, y, z, blockType) {
+                const key = this.getBlockKey(x, y, z);
+
+                if (this.blocks.has(key)) {
+                    return false;
+                }
+
+                // Store block data
+                this.blocks.set(key, blockType);
+
+                // Create mesh
+                const geometry = this.createBlockGeometry();
+                const materials = this.createBlockMaterial(blockType);
+                const mesh = new THREE.Mesh(geometry, materials);
+                mesh.position.set(
+                    Math.floor(x) + 0.5,
+                    Math.floor(y) + 0.5,
+                    Math.floor(z) + 0.5
+                );
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                mesh.userData = { blockKey: key, blockType: blockType };
+
+                this.scene.add(mesh);
+                this.blockMeshes.set(key, mesh);
+
+                return true;
+            }
+
+            removeBlock(x, y, z) {
+                const key = this.getBlockKey(x, y, z);
+
+                if (!this.blocks.has(key)) {
+                    return false;
+                }
+
+                // Remove from data
+                this.blocks.delete(key);
+
+                // Remove mesh
+                const mesh = this.blockMeshes.get(key);
+                if (mesh) {
+                    this.scene.remove(mesh);
+                    mesh.geometry.dispose();
+                    if (Array.isArray(mesh.material)) {
+                        mesh.material.forEach(m => m.dispose());
+                    } else {
+                        mesh.material.dispose();
+                    }
+                    this.blockMeshes.delete(key);
+                }
+
+                return true;
+            }
+
+            generateWorld() {
+                // Simple Perlin-like noise for terrain
+                const noise = (x, z) => {
+                    const scale = 0.1;
+                    return Math.sin(x * scale) * Math.cos(z * scale) * 3 +
+                           Math.sin(x * scale * 2) * Math.cos(z * scale * 2) * 1.5 +
+                           Math.sin(x * scale * 0.5) * Math.cos(z * scale * 0.5) * 4;
+                };
+
+                // Generate terrain
+                for (let x = 0; x < this.worldSize; x++) {
+                    for (let z = 0; z < this.worldSize; z++) {
+                        const height = Math.floor(10 + noise(x, z));
+
+                        for (let y = 0; y <= height; y++) {
+                            let blockType;
+
+                            if (y === height) {
+                                blockType = BLOCK_TYPES.GRASS;
+                            } else if (y > height - 4) {
+                                blockType = BLOCK_TYPES.DIRT;
+                            } else {
+                                blockType = BLOCK_TYPES.STONE;
+                            }
+
+                            this.addBlock(x, y, z, blockType);
+                        }
+                    }
+                }
+
+                // Add some trees
+                this.generateTrees();
+
+                // Update block count
+                document.getElementById('block-count').textContent = this.blocks.size;
+            }
+
+            generateTrees() {
+                const treePositions = [
+                    [5, 8],
+                    [12, 20],
+                    [25, 10],
+                    [18, 25],
+                    [8, 15]
+                ];
+
+                for (const [tx, tz] of treePositions) {
+                    if (tx < this.worldSize && tz < this.worldSize) {
+                        this.generateTree(tx, tz);
+                    }
+                }
+            }
+
+            generateTree(x, z) {
+                // Find ground level
+                let groundY = 0;
+                for (let y = 20; y >= 0; y--) {
+                    if (this.blocks.has(this.getBlockKey(x, y, z))) {
+                        groundY = y + 1;
+                        break;
+                    }
+                }
+
+                // Tree trunk
+                const trunkHeight = 4 + Math.floor(Math.random() * 3);
+                for (let y = groundY; y < groundY + trunkHeight; y++) {
+                    this.addBlock(x, y, z, BLOCK_TYPES.WOOD);
+                }
+
+                // Tree leaves
+                const leavesStart = groundY + trunkHeight - 2;
+                for (let ly = leavesStart; ly < groundY + trunkHeight + 2; ly++) {
+                    const radius = ly < groundY + trunkHeight ? 2 : 1;
+                    for (let lx = -radius; lx <= radius; lx++) {
+                        for (let lz = -radius; lz <= radius; lz++) {
+                            if (Math.abs(lx) + Math.abs(lz) <= radius + 1) {
+                                if (!(lx === 0 && lz === 0 && ly < groundY + trunkHeight)) {
+                                    this.addBlock(x + lx, ly, z + lz, BLOCK_TYPES.LEAVES);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            setupHotbar() {
+                const hotbar = document.getElementById('hotbar');
+                hotbar.innerHTML = '';
+
+                this.hotbarSlots.forEach((blockType, index) => {
+                    const slot = document.createElement('div');
+                    slot.className = 'hotbar-slot' + (index === this.selectedSlot ? ' selected' : '');
+                    slot.innerHTML = `
+                        <div class="block-preview" style="background: linear-gradient(135deg, #${blockType.top.toString(16).padStart(6, '0')} 0%, #${blockType.side.toString(16).padStart(6, '0')} 100%);"></div>
+                        <span class="slot-number">${index + 1}</span>
+                    `;
+                    slot.addEventListener('click', () => this.selectSlot(index));
+                    hotbar.appendChild(slot);
+                });
+            }
+
+            selectSlot(index) {
+                this.selectedSlot = index;
+                this.selectedBlockType = this.hotbarSlots[index];
+
+                document.querySelectorAll('.hotbar-slot').forEach((slot, i) => {
+                    slot.classList.toggle('selected', i === index);
+                });
+            }
+
+            setupEventListeners() {
+                // Start button
+                document.getElementById('start-button').addEventListener('click', () => {
+                    document.getElementById('start-screen').classList.add('hidden');
+                    this.controls.lock();
+                });
+
+                // Pointer lock
+                this.controls.addEventListener('lock', () => {
+                    document.getElementById('info').style.opacity = '0.3';
+                });
+
+                this.controls.addEventListener('unlock', () => {
+                    document.getElementById('info').style.opacity = '1';
+                });
+
+                // Keyboard
+                document.addEventListener('keydown', (e) => this.onKeyDown(e));
+                document.addEventListener('keyup', (e) => this.onKeyUp(e));
+
+                // Mouse
+                document.addEventListener('mousedown', (e) => this.onMouseDown(e));
+
+                // Scroll for slot selection
+                document.addEventListener('wheel', (e) => {
+                    if (this.controls.isLocked) {
+                        const direction = e.deltaY > 0 ? 1 : -1;
+                        let newSlot = this.selectedSlot + direction;
+                        if (newSlot < 0) newSlot = this.hotbarSlots.length - 1;
+                        if (newSlot >= this.hotbarSlots.length) newSlot = 0;
+                        this.selectSlot(newSlot);
+                    }
+                });
+
+                // Window resize
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+            }
+
+            onKeyDown(event) {
+                if (!this.controls.isLocked) return;
+
+                switch (event.code) {
+                    case 'KeyW':
+                        this.moveForward = true;
+                        break;
+                    case 'KeyS':
+                        this.moveBackward = true;
+                        break;
+                    case 'KeyA':
+                        this.moveLeft = true;
+                        break;
+                    case 'KeyD':
+                        this.moveRight = true;
+                        break;
+                    case 'Space':
+                        if (this.canJump) {
+                            this.velocity.y = 8;
+                            this.canJump = false;
+                        }
+                        break;
+                    case 'ShiftLeft':
+                        this.isCrouching = true;
+                        break;
+                    case 'Digit1':
+                    case 'Digit2':
+                    case 'Digit3':
+                    case 'Digit4':
+                    case 'Digit5':
+                    case 'Digit6':
+                    case 'Digit7':
+                    case 'Digit8':
+                    case 'Digit9':
+                        const slot = parseInt(event.code.replace('Digit', '')) - 1;
+                        if (slot < this.hotbarSlots.length) {
+                            this.selectSlot(slot);
+                        }
+                        break;
+                }
+            }
+
+            onKeyUp(event) {
+                switch (event.code) {
+                    case 'KeyW':
+                        this.moveForward = false;
+                        break;
+                    case 'KeyS':
+                        this.moveBackward = false;
+                        break;
+                    case 'KeyA':
+                        this.moveLeft = false;
+                        break;
+                    case 'KeyD':
+                        this.moveRight = false;
+                        break;
+                    case 'ShiftLeft':
+                        this.isCrouching = false;
+                        break;
+                }
+            }
+
+            onMouseDown(event) {
+                if (!this.controls.isLocked) return;
+
+                const intersection = this.getTargetBlock();
+
+                if (event.button === 0) {
+                    // Left click - destroy block
+                    if (intersection) {
+                        const pos = intersection.object.position;
+                        this.removeBlock(pos.x - 0.5, pos.y - 0.5, pos.z - 0.5);
+                        document.getElementById('block-count').textContent = this.blocks.size;
+                    }
+                } else if (event.button === 2) {
+                    // Right click - place block
+                    event.preventDefault();
+                    if (intersection) {
+                        const normal = intersection.face.normal;
+                        const pos = intersection.object.position;
+                        const newX = pos.x - 0.5 + normal.x;
+                        const newY = pos.y - 0.5 + normal.y;
+                        const newZ = pos.z - 0.5 + normal.z;
+
+                        // Check if player is not inside the new block position
+                        const playerPos = this.camera.position;
+                        const blockCenter = new THREE.Vector3(newX + 0.5, newY + 0.5, newZ + 0.5);
+
+                        if (playerPos.distanceTo(blockCenter) > 1.2) {
+                            this.addBlock(newX, newY, newZ, this.selectedBlockType);
+                            document.getElementById('block-count').textContent = this.blocks.size;
+                        }
+                    }
+                }
+            }
+
+            getTargetBlock() {
+                this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                const meshes = Array.from(this.blockMeshes.values());
+                const intersects = this.raycaster.intersectObjects(meshes);
+                return intersects.length > 0 ? intersects[0] : null;
+            }
+
+            updateHighlight() {
+                const intersection = this.getTargetBlock();
+
+                if (intersection) {
+                    this.highlightMesh.position.copy(intersection.object.position);
+                    this.highlightMesh.visible = true;
+                } else {
+                    this.highlightMesh.visible = false;
+                }
+            }
+
+            updatePhysics(delta) {
+                if (!this.controls.isLocked) return;
+
+                // Gravity
+                this.velocity.y -= 25 * delta;
+
+                // Movement direction
+                this.direction.z = Number(this.moveForward) - Number(this.moveBackward);
+                this.direction.x = Number(this.moveRight) - Number(this.moveLeft);
+                this.direction.normalize();
+
+                // Speed
+                const speed = this.isCrouching ? 3 : 6;
+
+                // Apply movement
+                if (this.moveForward || this.moveBackward) {
+                    this.velocity.z = this.direction.z * speed;
+                } else {
+                    this.velocity.z = 0;
+                }
+
+                if (this.moveLeft || this.moveRight) {
+                    this.velocity.x = this.direction.x * speed;
+                } else {
+                    this.velocity.x = 0;
+                }
+
+                // Move
+                this.controls.moveRight(this.velocity.x * delta);
+                this.controls.moveForward(this.velocity.z * delta);
+
+                // Apply vertical velocity
+                this.camera.position.y += this.velocity.y * delta;
+
+                // Ground collision
+                const playerFeetY = this.camera.position.y - 1.6;
+                const groundCheck = this.getGroundHeight(
+                    this.camera.position.x,
+                    this.camera.position.z
+                );
+
+                if (playerFeetY < groundCheck) {
+                    this.camera.position.y = groundCheck + 1.6;
+                    this.velocity.y = 0;
+                    this.canJump = true;
+                }
+
+                // Keep player in bounds
+                this.camera.position.x = Math.max(0.5, Math.min(this.worldSize - 0.5, this.camera.position.x));
+                this.camera.position.z = Math.max(0.5, Math.min(this.worldSize - 0.5, this.camera.position.z));
+
+                // Prevent falling below world
+                if (this.camera.position.y < -10) {
+                    this.camera.position.y = 25;
+                    this.velocity.y = 0;
+                }
+            }
+
+            getGroundHeight(x, z) {
+                for (let y = 30; y >= 0; y--) {
+                    if (this.blocks.has(this.getBlockKey(x, y, z))) {
+                        return y + 1;
+                    }
+                }
+                return 0;
+            }
+
+            updateDebugInfo() {
+                this.frameCount++;
+                const now = performance.now();
+
+                if (now - this.lastFpsUpdate > 500) {
+                    const fps = Math.round(this.frameCount / ((now - this.lastFpsUpdate) / 1000));
+                    document.getElementById('fps').textContent = fps;
+                    this.frameCount = 0;
+                    this.lastFpsUpdate = now;
+                }
+
+                const pos = this.camera.position;
+                document.getElementById('position').textContent =
+                    `${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)}`;
+            }
+
+            animate() {
+                requestAnimationFrame(() => this.animate());
+
+                const delta = Math.min(this.clock.getDelta(), 0.1);
+
+                this.updatePhysics(delta);
+                this.updateHighlight();
+                this.updateDebugInfo();
+
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+
+        // Prevent context menu
+        document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        // Start game
+        const game = new MinecraftGame();
+    </script>
+</body>
+</html>
