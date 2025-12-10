@@ -116,8 +116,9 @@ app.delete('/api/todos/:id', (req, res) => {
   res.status(404).json({ error: 'タスクが見つかりません' });
 });
 
-// サーバー起動
-app.listen(PORT, () => {
+// サーバー起動（外部アクセス許可）
+app.listen(PORT, '0.0.0.0', () => {
   initDataFile();
   console.log(`🚀 To Do アプリが起動しました: http://localhost:${PORT}`);
+  console.log(`📱 外部からのアクセス: http://<IPアドレス>:${PORT}`);
 });
