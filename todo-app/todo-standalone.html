@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>To Do</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #0a0a0f; --card: #1a1a24; --input: #22222e;
+      --accent: #6366f1; --text: #fff; --muted: #6b7280;
+      --success: #10b981; --border: #2d2d3a;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg); color: var(--text);
+      min-height: 100vh; min-height: 100dvh;
+    }
+    .app { max-width: 500px; margin: 0 auto; padding: 20px; padding-bottom: 100px; }
+
+    h1 {
+      font-size: 28px; font-weight: 700; margin-bottom: 8px;
+      background: linear-gradient(135deg, #fff, #6366f1);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .date { font-size: 14px; color: var(--muted); margin-bottom: 20px; }
+
+    .stats { display: flex; gap: 12px; margin-bottom: 20px; }
+    .stat { flex: 1; background: var(--card); border-radius: 16px; padding: 16px; border: 1px solid var(--border); }
+    .stat-num { font-size: 28px; font-weight: 700; color: var(--accent); }
+    .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; margin-top: 4px; }
+
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tab {
+      flex: 1; padding: 12px; background: transparent; border: none;
+      color: var(--muted); font-size: 14px; font-weight: 500;
+      cursor: pointer; border-radius: 12px; font-family: inherit;
+    }
+    .tab.active { background: var(--card); color: var(--text); border: 1px solid var(--border); }
+
+    .task {
+      background: var(--card); border-radius: 16px; padding: 16px;
+      margin-bottom: 12px; border: 1px solid var(--border);
+      display: flex; align-items: flex-start; gap: 14px;
+      animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(-10px); } }
+
+    .checkbox {
+      width: 24px; height: 24px; border: 2px solid var(--border);
+      border-radius: 50%; cursor: pointer; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s;
+    }
+    .checkbox:hover { border-color: var(--accent); }
+    .checkbox.done { background: var(--success); border-color: var(--success); }
+    .checkbox.done::after {
+      content: ''; width: 8px; height: 5px;
+      border: 2px solid #fff; border-top: none; border-right: none;
+      transform: rotate(-45deg); margin-top: -2px;
+    }
+
+    .task-content { flex: 1; min-width: 0; }
+    .task-text { font-size: 16px; line-height: 1.5; word-break: break-word; }
+    .task.completed .task-text { color: var(--muted); text-decoration: line-through; }
+    .task-time { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+    .delete {
+      width: 32px; height: 32px; background: transparent; border: none;
+      color: var(--muted); cursor: pointer; border-radius: 8px;
+      font-size: 18px; transition: all 0.2s;
+    }
+    .delete:hover { background: rgba(239,68,68,0.1); color: #ef4444; }
+
+    .empty { text-align: center; padding: 40px; color: var(--muted); }
+    .empty-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
+
+    .input-area {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: linear-gradient(to top, var(--bg) 80%, transparent);
+      padding: 20px; padding-bottom: max(20px, env(safe-area-inset-bottom));
+    }
+    .input-wrap { max-width: 500px; margin: 0 auto; display: flex; gap: 12px; }
+    .input {
+      flex: 1; padding: 16px 20px; background: var(--input);
+      border: 1px solid var(--border); border-radius: 16px;
+      color: var(--text); font-size: 16px; outline: none;
+    }
+    .input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(99,102,241,0.3); }
+    .input::placeholder { color: var(--muted); }
+
+    .add-btn {
+      width: 56px; height: 56px;
+      background: linear-gradient(135deg, var(--accent), #8b5cf6);
+      border: none; border-radius: 16px; color: #fff;
+      font-size: 28px; cursor: pointer; transition: transform 0.2s;
+    }
+    .add-btn:active { transform: scale(0.95); }
+
+    .toast {
+      position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-100px);
+      background: var(--card); border: 1px solid var(--success);
+      padding: 12px 24px; border-radius: 12px; font-size: 14px;
+      transition: transform 0.3s; z-index: 1000;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>To Do</h1>
+    <p class="date" id="date"></p>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-num" id="activeNum">0</div><div class="stat-label">Active</div></div>
+      <div class="stat"><div class="stat-num" id="doneNum">0</div><div class="stat-label">Done</div></div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" onclick="showTab('active')">Active</button>
+      <button class="tab" onclick="showTab('history')">History</button>
+    </div>
+
+    <div id="list"></div>
+  </div>
+
+  <div class="input-area">
+    <div class="input-wrap">
+      <input type="text" class="input" id="input" placeholder="新しいタスクを追加...">
+      <button class="add-btn" onclick="addTask()">+</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    let todos = JSON.parse(localStorage.getItem('todos') || '[]');
+    let done = JSON.parse(localStorage.getItem('done') || '[]');
+    let tab = 'active';
+
+    const $ = id => document.getElementById(id);
+
+    // 初期化
+    $('date').textContent = new Date().toLocaleDateString('ja-JP', {
+      year: 'numeric', month: 'long', day: 'numeric', weekday: 'long'
+    });
+
+    $('input').addEventListener('keypress', e => { if (e.key === 'Enter') addTask(); });
+
+    render();
+
+    function save() {
+      localStorage.setItem('todos', JSON.stringify(todos));
+      localStorage.setItem('done', JSON.stringify(done));
+    }
+
+    function addTask() {
+      const text = $('input').value.trim();
+      if (!text) return;
+
+      todos.unshift({ id: Date.now(), text, created: new Date().toISOString() });
+      $('input').value = '';
+      save();
+      if (tab !== 'active') showTab('active');
+      else render();
+      toast('タスクを追加しました');
+    }
+
+    function complete(id) {
+      const i = todos.findIndex(t => t.id === id);
+      if (i === -1) return;
+      const task = todos.splice(i, 1)[0];
+      task.completed = new Date().toISOString();
+      done.unshift(task);
+      save(); render();
+      toast('完了しました！');
+    }
+
+    function restore(id) {
+      const i = done.findIndex(t => t.id === id);
+      if (i === -1) return;
+      const task = done.splice(i, 1)[0];
+      delete task.completed;
+      todos.unshift(task);
+      save(); render();
+      toast('復元しました');
+    }
+
+    function remove(id) {
+      todos = todos.filter(t => t.id !== id);
+      done = done.filter(t => t.id !== id);
+      save(); render();
+      toast('削除しました');
+    }
+
+    function showTab(t) {
+      tab = t;
+      document.querySelectorAll('.tab').forEach((el, i) => {
+        el.classList.toggle('active', (t === 'active' && i === 0) || (t === 'history' && i === 1));
+      });
+      render();
+    }
+
+    function timeAgo(date) {
+      const diff = Date.now() - new Date(date).getTime();
+      if (diff < 60000) return 'たった今';
+      if (diff < 3600000) return Math.floor(diff / 60000) + '分前';
+      if (diff < 86400000) return Math.floor(diff / 3600000) + '時間前';
+      return new Date(date).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' });
+    }
+
+    function render() {
+      $('activeNum').textContent = todos.length;
+      $('doneNum').textContent = done.length;
+
+      const items = tab === 'active' ? todos : done;
+      const isHistory = tab === 'history';
+
+      if (items.length === 0) {
+        $('list').innerHTML = `
+          <div class="empty">
+            <div class="empty-icon">${isHistory ? '📋' : '✨'}</div>
+            <p>${isHistory ? '完了したタスクはありません' : 'タスクがありません'}</p>
+          </div>`;
+        return;
+      }
+
+      $('list').innerHTML = items.map(t => `
+        <div class="task ${isHistory ? 'completed' : ''}">
+          <div class="checkbox ${isHistory ? 'done' : ''}" onclick="${isHistory ? `restore(${t.id})` : `complete(${t.id})`}"></div>
+          <div class="task-content">
+            <div class="task-text">${escapeHtml(t.text)}</div>
+            <div class="task-time">${isHistory ? '完了: ' : ''}${timeAgo(isHistory ? t.completed : t.created)}</div>
+          </div>
+          <button class="delete" onclick="remove(${t.id})">×</button>
+        </div>
+      `).join('');
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function toast(msg) {
+      const t = $('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2000);
+    }
+  </script>
+</body>
+</html>
