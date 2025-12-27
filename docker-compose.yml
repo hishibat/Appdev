@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: abeam-governance-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: abeam
+      POSTGRES_PASSWORD: abeam_secure_password
+      POSTGRES_DB: abeam_governance
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U abeam"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: abeam-governance-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql://abeam:abeam_secure_password@postgres:5432/abeam_governance?schema=public"
+      NEXTAUTH_URL: "http://localhost:3000"
+      NEXTAUTH_SECRET: "change-this-to-a-random-secret-in-production"
+      APP_NAME: "ABeam IT Governance Quick Assessment"
+      BRANDING_PRIMARY: "#004F9F"
+    ports:
+      - "3000:3000"
+    command: >
+      sh -c "
+        npx prisma migrate deploy &&
+        npx prisma db seed &&
+        node server.js
+      "
+
+volumes:
+  postgres_data:
+    driver: local
